@@ -20,14 +20,14 @@ extern crate serde_json;
 
 mod statemap;
 
-use statemap::*;
+use crate::statemap::*;
 
 macro_rules! fatal {
-    ($fmt:expr) => ({
+    ($fmt:expr_2021) => ({
         eprint!(concat!("statemap: ", $fmt, "\n"));
         ::std::process::exit(1);
     });
-    ($fmt:expr, $($arg:tt)*) => ({
+    ($fmt:expr_2021, $($arg:tt)*) => ({
         eprint!(concat!("statemap: ", $fmt, "\n"), $($arg)*);
         ::std::process::exit(1);
     });
@@ -171,6 +171,13 @@ fn main() {
             hasarg: HasArg::No,
             alias: None,
         },
+        Opt {
+            name: ("f", "filter"),
+            help: "regular expression to filter entities",
+            hint: "REGEXP",
+            hasarg: HasArg::Yes,
+            alias: None,
+        },
     ];
 
     let mut args: Vec<String> = env::args().collect();
@@ -261,6 +268,7 @@ fn main() {
         end: end,
         notags: matches.opt_present("ignore-tags"),
         abstime: false,
+        filter: matches.opt_str("filter"),
         .. Default::default()
     };
 

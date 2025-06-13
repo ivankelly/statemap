@@ -50,6 +50,7 @@ struct StatemapInputMetadata {
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct StatemapInputEvent {
     time: String,                           // time of this datum
     entity: String,                         // name of entity
@@ -63,13 +64,14 @@ struct StatemapInputTag {
     tag: String,                            // tag itself
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Config {
     pub maxrect: u64,                       // maximum number of rectangles
     pub abstime: bool,                      // time is absolute, not relative
     pub begin: i64,                         // absolute/relative time to begin
     pub end: i64,                           // absolute/relative time to end
     pub notags: bool,                       // do not include tags
+    pub filter: Option<String>,             // filter, if any
 }
 
 /*
@@ -89,7 +91,7 @@ pub struct StatemapSVGConfig {
 
 #[derive(Copy,Clone,Debug)]
 struct StatemapColor {
-    color: Color,                           // underlying color
+    color: LinSrgb,                         // underlying color
 }
 
 #[derive(Debug)]
@@ -130,6 +132,7 @@ struct StatemapEntity {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Statemap {
     config: Config,                         // configuration
     metadata: Option<StatemapInputMetadata>, // in-stream metadata
@@ -194,7 +197,7 @@ use std::cmp;
 use std::path::Path;
 
 use self::memmap::MmapOptions;
-use self::palette::{Srgb, Color, Mix};
+use self::palette::{Srgb, LinSrgb, Mix};
 use self::serde_json::Value;
 
 impl Default for Config {
@@ -205,6 +208,7 @@ impl Default for Config {
             end: 0,
             notags: false,
             abstime: false,
+            filter: None,
         }
     }
 }
@@ -252,7 +256,7 @@ impl FromStr for StatemapColor {
                 let rgb = Srgb::<f32>::from_format(color);
 
                 return Ok(StatemapColor {
-                    color: rgb.into_format().into_linear().into()
+                    color: rgb.into_linear()
                 });
             }
             None => {}
@@ -267,7 +271,7 @@ impl FromStr for StatemapColor {
                 let rgb = Srgb::new(r.unwrap(), g.unwrap(), b.unwrap());
 
                 return Ok(StatemapColor {
-                    color: rgb.into_format().into_linear().into()
+                    color: rgb.into_linear()
                 });
             }
         }
@@ -280,7 +284,8 @@ impl FromStr for StatemapColor {
 
 impl fmt::Display for StatemapColor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rgb = Srgb::from_linear(self.color.into()).into_components();
+        let rgb: (f32, f32, f32) =
+            Srgb::from_linear(self.color).into_components();
 
         write!(f, "rgb({}, {}, {})", (rgb.0 * 256.0) as u8,
             (rgb.1 * 256.0) as u8, (rgb.2 * 256.0) as u8)
@@ -293,19 +298,21 @@ impl StatemapColor {
             rand::random::<u8>());
 
         StatemapColor {
-            color: rgb.into_format().into_linear().into()
+            color: rgb.into_linear()
         }
     }
 
     fn _mix(&self, other: &Self, ratio: f32) -> Self {
         StatemapColor {
-            color: self.color.mix(&other.color, ratio)
+            color: self.color.mix(other.color, ratio)
         }
     }
 
     fn mix_nonlinear(&self, other: &Self, ratio: f32) -> Self {
-        let lhs = Srgb::from_linear(self.color.into()).into_components();
-        let rhs = Srgb::from_linear(other.color.into()).into_components();
+        let lhs: (f32, f32, f32) =
+            Srgb::from_linear(self.color).into_components();
+        let rhs: (f32, f32, f32) =
+            Srgb::from_linear(other.color).into_components();
 
         let recip = 1.0 - ratio;
 
@@ -314,7 +321,7 @@ impl StatemapColor {
             lhs.2 as f32 * recip + rhs.2 as f32 * ratio);
 
         StatemapColor {
-            color: rgb.into_format().into_linear().into()
+            color: rgb.into_linear()
         }
     }
 }
@@ -926,7 +933,7 @@ where
 impl Statemap {
     pub fn new(config: &Config) -> Self {
         Statemap {
-            config: *config,
+            config: config.clone(),
             nrecs: 0,
             nevents: 0,
             entities: HashMap::new(),
@@ -1354,6 +1361,16 @@ impl Statemap {
                     return Ok(Ingest::Success);
                 }
 
+                /*
+                 * If we have a filter and this doesn't match, we are done
+                 * with it.
+                 */
+                if let Some(filter) = &self.config.filter {
+                    if &datum.entity != filter {
+                        return Ok(Ingest::Success);
+                    }
+                }
+
                 if datum.state >= nstates {
                     return self.err("illegal state value");
                 }
@@ -1447,6 +1464,16 @@ impl Statemap {
         match try_parse::<StatemapInputDescription>(payload) {
             Ok(None) => return Ok(Ingest::EndOfFile),
             Ok(Some(datum)) => {
+                /*
+                 * If we have a filter and this doesn't match, we don't want
+                 * to keep track of the description.
+                 */
+                if let Some(filter) = &self.config.filter {
+                    if &datum.entity != filter {
+                        return Ok(Ingest::Success);
+                    }
+                }
+
                 let entity = self.entity_lookup(&datum.entity);
                 entity.description = Some(datum.description.to_string());
 
@@ -1583,7 +1610,8 @@ impl Statemap {
         for entity in self.entities.values() {
             let val = match entity.description {
                 Some(ref description) => {
-                    format!("description: \"{}\"", description)
+                    format!("description: {}",
+                        serde_json::to_string_pretty(description).unwrap())
                 }
                 _ => { "".to_string() }
             };
@@ -1841,7 +1869,7 @@ impl<'a> StatemapSVG<'a> {
             width: u32,
             lheight: u32,
             spacing: u32
-        };
+        }
 
         let base = &statemaps[0];
 
