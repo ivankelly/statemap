@@ -1,7 +1,8 @@
 [package]
 name = "statemap"
-version = "0.1.0"
-authors = ["Bryan Cantrill <bryan@joyent.com>"]
+version = "0.2.0"
+authors = ["Bryan Cantrill <bryan@oxidecomputer.com>"]
+edition = "2021"
 
 [dependencies]
 getopts = "0.2"

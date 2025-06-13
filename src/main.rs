@@ -20,14 +20,14 @@ extern crate serde_json;
 
 mod statemap;
 
-use statemap::*;
+use crate::statemap::*;
 
 macro_rules! fatal {
-    ($fmt:expr) => ({
+    ($fmt:expr_2021) => ({
         eprint!(concat!("statemap: ", $fmt, "\n"));
         ::std::process::exit(1);
     });
-    ($fmt:expr, $($arg:tt)*) => ({
+    ($fmt:expr_2021, $($arg:tt)*) => ({
         eprint!(concat!("statemap: ", $fmt, "\n"), $($arg)*);
         ::std::process::exit(1);
     });

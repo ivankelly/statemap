@@ -1362,7 +1362,7 @@ impl Statemap {
                  * If we have a filter and this doesn't match, we are done
                  * with it.
                  */
-                if let Some(ref filter) = &self.config.filter {
+                if let Some(filter) = &self.config.filter {
                     if &datum.entity != filter {
                         return Ok(Ingest::Success);
                     }
@@ -1465,7 +1465,7 @@ impl Statemap {
                  * If we have a filter and this doesn't match, we don't want
                  * to keep track of the description.
                  */
-                if let Some(ref filter) = &self.config.filter {
+                if let Some(filter) = &self.config.filter {
                     if &datum.entity != filter {
                         return Ok(Ingest::Success);
                     }
