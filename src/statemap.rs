@@ -91,7 +91,7 @@ pub struct StatemapSVGConfig {
 
 #[derive(Copy,Clone,Debug)]
 struct StatemapColor {
-    color: Color,                           // underlying color
+    color: LinSrgb,                         // underlying color
 }
 
 #[derive(Debug)]
@@ -197,7 +197,7 @@ use std::cmp;
 use std::path::Path;
 
 use self::memmap::MmapOptions;
-use self::palette::{Srgb, Color, Mix};
+use self::palette::{Srgb, LinSrgb, Mix};
 use self::serde_json::Value;
 
 impl Default for Config {
@@ -256,7 +256,7 @@ impl FromStr for StatemapColor {
                 let rgb = Srgb::<f32>::from_format(color);
 
                 return Ok(StatemapColor {
-                    color: rgb.into_format().into_linear().into()
+                    color: rgb.into_linear()
                 });
             }
             None => {}
@@ -271,7 +271,7 @@ impl FromStr for StatemapColor {
                 let rgb = Srgb::new(r.unwrap(), g.unwrap(), b.unwrap());
 
                 return Ok(StatemapColor {
-                    color: rgb.into_format().into_linear().into()
+                    color: rgb.into_linear()
                 });
             }
         }
@@ -284,7 +284,7 @@ impl FromStr for StatemapColor {
 
 impl fmt::Display for StatemapColor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rgb = Srgb::from_linear(self.color.into()).into_components();
+        let rgb: (f32, f32, f32) = Srgb::from_linear(self.color).into_components();
 
         write!(f, "rgb({}, {}, {})", (rgb.0 * 256.0) as u8,
             (rgb.1 * 256.0) as u8, (rgb.2 * 256.0) as u8)
@@ -297,19 +297,19 @@ impl StatemapColor {
             rand::random::<u8>());
 
         StatemapColor {
-            color: rgb.into_format().into_linear().into()
+            color: rgb.into_linear()
         }
     }
 
     fn _mix(&self, other: &Self, ratio: f32) -> Self {
         StatemapColor {
-            color: self.color.mix(&other.color, ratio)
+            color: self.color.mix(other.color, ratio)
         }
     }
 
     fn mix_nonlinear(&self, other: &Self, ratio: f32) -> Self {
-        let lhs = Srgb::from_linear(self.color.into()).into_components();
-        let rhs = Srgb::from_linear(other.color.into()).into_components();
+        let lhs: (f32, f32, f32) = Srgb::from_linear(self.color).into_components();
+        let rhs: (f32, f32, f32) = Srgb::from_linear(other.color).into_components();
 
         let recip = 1.0 - ratio;
 
@@ -318,7 +318,7 @@ impl StatemapColor {
             lhs.2 as f32 * recip + rhs.2 as f32 * ratio);
 
         StatemapColor {
-            color: rgb.into_format().into_linear().into()
+            color: rgb.into_linear()
         }
     }
 }

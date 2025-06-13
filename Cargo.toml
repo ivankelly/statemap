@@ -5,10 +5,10 @@ authors = ["Bryan Cantrill <bryan@joyent.com>"]
 
 [dependencies]
 getopts = "0.2"
-memmap = "0.6"
+memmap = "0.7"
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
 natord = "1.0.9"
-palette = "0.4"
-rand = "0.5"
+palette = "0.7"
+rand = "0.9"
