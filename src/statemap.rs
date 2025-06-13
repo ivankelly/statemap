@@ -284,7 +284,8 @@ impl FromStr for StatemapColor {
 
 impl fmt::Display for StatemapColor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let rgb: (f32, f32, f32) = Srgb::from_linear(self.color).into_components();
+        let rgb: (f32, f32, f32) =
+            Srgb::from_linear(self.color).into_components();
 
         write!(f, "rgb({}, {}, {})", (rgb.0 * 256.0) as u8,
             (rgb.1 * 256.0) as u8, (rgb.2 * 256.0) as u8)
@@ -308,8 +309,10 @@ impl StatemapColor {
     }
 
     fn mix_nonlinear(&self, other: &Self, ratio: f32) -> Self {
-        let lhs: (f32, f32, f32) = Srgb::from_linear(self.color).into_components();
-        let rhs: (f32, f32, f32) = Srgb::from_linear(other.color).into_components();
+        let lhs: (f32, f32, f32) =
+            Srgb::from_linear(self.color).into_components();
+        let rhs: (f32, f32, f32) =
+            Srgb::from_linear(other.color).into_components();
 
         let recip = 1.0 - ratio;
 
