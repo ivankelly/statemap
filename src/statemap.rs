@@ -50,6 +50,7 @@ struct StatemapInputMetadata {
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+#[allow(dead_code)]
 struct StatemapInputEvent {
     time: String,                           // time of this datum
     entity: String,                         // name of entity
@@ -63,13 +64,14 @@ struct StatemapInputTag {
     tag: String,                            // tag itself
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Config {
     pub maxrect: u64,                       // maximum number of rectangles
     pub abstime: bool,                      // time is absolute, not relative
     pub begin: i64,                         // absolute/relative time to begin
     pub end: i64,                           // absolute/relative time to end
     pub notags: bool,                       // do not include tags
+    pub filter: Option<String>,             // filter, if any
 }
 
 /*
@@ -130,6 +132,7 @@ struct StatemapEntity {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Statemap {
     config: Config,                         // configuration
     metadata: Option<StatemapInputMetadata>, // in-stream metadata
@@ -205,6 +208,7 @@ impl Default for Config {
             end: 0,
             notags: false,
             abstime: false,
+            filter: None,
         }
     }
 }
@@ -926,7 +930,7 @@ where
 impl Statemap {
     pub fn new(config: &Config) -> Self {
         Statemap {
-            config: *config,
+            config: config.clone(),
             nrecs: 0,
             nevents: 0,
             entities: HashMap::new(),
@@ -1354,6 +1358,16 @@ impl Statemap {
                     return Ok(Ingest::Success);
                 }
 
+                /*
+                 * If we have a filter and this doesn't match, we are done
+                 * with it.
+                 */
+                if let Some(ref filter) = &self.config.filter {
+                    if &datum.entity != filter {
+                        return Ok(Ingest::Success);
+                    }
+                }
+
                 if datum.state >= nstates {
                     return self.err("illegal state value");
                 }
@@ -1447,6 +1461,16 @@ impl Statemap {
         match try_parse::<StatemapInputDescription>(payload) {
             Ok(None) => return Ok(Ingest::EndOfFile),
             Ok(Some(datum)) => {
+                /*
+                 * If we have a filter and this doesn't match, we don't want
+                 * to keep track of the description.
+                 */
+                if let Some(ref filter) = &self.config.filter {
+                    if &datum.entity != filter {
+                        return Ok(Ingest::Success);
+                    }
+                }
+
                 let entity = self.entity_lookup(&datum.entity);
                 entity.description = Some(datum.description.to_string());
 
@@ -1583,7 +1607,8 @@ impl Statemap {
         for entity in self.entities.values() {
             let val = match entity.description {
                 Some(ref description) => {
-                    format!("description: \"{}\"", description)
+                    format!("description: {}",
+                        serde_json::to_string_pretty(description).unwrap())
                 }
                 _ => { "".to_string() }
             };
@@ -1841,7 +1866,7 @@ impl<'a> StatemapSVG<'a> {
             width: u32,
             lheight: u32,
             spacing: u32
-        };
+        }
 
         let base = &statemaps[0];
 

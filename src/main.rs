@@ -171,6 +171,13 @@ fn main() {
             hasarg: HasArg::No,
             alias: None,
         },
+        Opt {
+            name: ("f", "filter"),
+            help: "regular expression to filter entities",
+            hint: "REGEXP",
+            hasarg: HasArg::Yes,
+            alias: None,
+        },
     ];
 
     let mut args: Vec<String> = env::args().collect();
@@ -261,6 +268,7 @@ fn main() {
         end: end,
         notags: matches.opt_present("ignore-tags"),
         abstime: false,
+        filter: matches.opt_str("filter"),
         .. Default::default()
     };
 
