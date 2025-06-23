@@ -1,5 +1,6 @@
 /*
  * Copyright 2018, Joyent, Inc.
+ * Copyright 2025 Oxide Computer Company
  */
 
 /*
@@ -19,7 +20,7 @@ var g_width;					/* pixel width of statemap */
 var g_statesel;					/* state selection, if any */
 var g_tagsel;					/* tag selection, if any */
 var g_tagvalsel;				/* tag val selection, if any */
-
+var g_highlight;				/* fill for highlight */
 var g_statemaps = [];				/* array of statemaps */
 
 var timeunits = function (timeval)
@@ -60,7 +61,7 @@ var timeFromMapX = function (mapX)
 	 */
 	offs = (mapX / g_width) * (timeWidth / g_transMatrix[0]);
 
-	return (base + offs);
+	return (Math.round(base + offs));
 };
 
 var timeToMapX = function (time)
@@ -155,6 +156,7 @@ var initStatemap = function (statemap, elem, position)
 	highlight = g_svgDoc.getElementById('statemap-' +
 	    statemap + '-highlight');
 	highlight.classList.add('statemap-highlight');
+	g_highlight = window.getComputedStyle(highlight).fill;
 
 	return (position);
 };
@@ -164,6 +166,76 @@ var init = function (evt)
 	var i = 0, position = 0, statemap;
 
 	g_svgDoc = evt.target.ownerDocument;
+
+	var digits = [];
+
+	g_svgDoc.addEventListener("keydown", (event) => {
+		if (event.key == "+") {
+			zoomclick(1.25);
+		}
+
+		if (event.key == "-") {
+			zoomclick(0.8);
+		}
+
+		if (event.key >= '0' && event.key <= '9') {
+			digits.push(event.key);
+			return;
+		}
+
+		var ns = undefined;
+
+		if (event.key == 's') {
+			ns = 1000000000;
+		}
+
+		if (event.key == 'm') {
+			ns = 1000000;
+		}
+
+		if (event.key == 'u') {
+			ns = 1000;
+		}
+
+		if (ns) {
+			var mult;
+
+			if (digits.length == 0) {
+				mult = 1;
+			} else {
+				mult = parseInt(digits.join(''), 10);
+			}
+
+			zoomtime(mult * ns);
+		}
+
+		digits = [];
+
+		if (event.key == "ArrowLeft" && !event.shiftKey) {
+			panclick(50, 0);
+		}
+
+		if (event.key == "ArrowRight" && !event.shiftKey) {
+			panclick(-50, 0);
+		}
+
+		if (event.key == "ArrowUp" && event.shiftKey) {
+			statebarBump(-1);
+		}
+
+		if (event.key == "ArrowDown" && event.shiftKey) {
+			statebarBump(1);
+		}
+
+		if (event.key == "ArrowLeft" && event.shiftKey) {
+			timebarBump(-1);
+		}
+
+		if (event.key == "ArrowRight" && event.shiftKey) {
+			timebarBump(1);
+		}
+        });
+
 	g_entities = [];
 
 	while ((statemap = g_svgDoc.getElementById('statemap-' + i)) != null)
@@ -546,6 +618,59 @@ var statebarRemove = function (statebar)
 	statebar.entity = undefined;
 };
 
+var statebarBump = function (delta)
+{
+	if (!g_statebar)
+		return;
+
+	/*
+	 * We have a statebar -- and we want to find the state (if any) that
+	 * corresponds to the statemap for the selected statebar, but at
+	 * a position that is the selected entities position plus the delta.
+	 */
+	var current = g_statebar.entity;
+
+	for (id in g_entities) {
+		var entity = g_entities[id];
+
+		if (entity.statemap !== current.statemap) {
+			continue;
+		}
+
+		if (entity.position != current.position + delta) {
+			continue;
+		}
+
+		/*
+		 * We have the entity that is the target for the statebar!
+		 */
+		var elem = entity.element;
+
+		var find = function (datum, i, count) {
+			idx = i;
+		};
+
+		/*
+		 * If we have a timebar, we want to find the datum associated
+		 * with the current time for this entity.
+		 */
+		if (g_timebar) {
+			entityForEachDatum(entity, g_timebar.time, 0, find);
+		}
+
+		for (var i = 0; i < elem.childNodes.length; i++) {
+			var child = elem.childNodes[i];
+
+			if (child.nodeName != 'rect')
+				continue;
+
+			statebarRemove(g_statebar);
+			g_statebar = statebarCreate(child, idx);
+			return;
+		}
+	}
+};
+
 var timebarRemove = function (timebar)
 {
 	if (!timebar)
@@ -841,6 +966,57 @@ var timebarCreate = function (mapX)
 	return (timebar);
 };
 
+var timebarBump = function (delta)
+{
+	if (!g_statebar || !g_timebar || !g_timebar.bar)
+		return;
+
+	/*
+	 * First, we need to determine our current datum index for
+	 * our statebar.
+	 */
+	var entity = g_statebar.entity;
+	var data = g_statemaps[entity.statemap].data[entity.name];
+
+	var find = function (datum, i, count) {
+		idx = i;
+	};
+
+	entityForEachDatum(entity, g_timebar.time, 0, find);
+
+	if (delta == -1) {
+		if (idx == 0) {
+			return;
+		}
+		idx--;
+	} else {
+		if (idx == data.length - 1) {
+			return;
+		}
+		idx++;
+	}
+
+	/*
+	 * We have our current datum, and we know our destination; find the
+	 * mapX that corresponds to the beginning of that state, and then
+	 * create both our timebar and statebar.
+	 */
+	var mapX = timeToMapX(data[idx].t);
+
+	if (mapX < 0 || mapX >= g_width) {
+		return;
+	}
+
+	timebarRemove(g_timebar);
+	timebarRemoveSubbar(g_timebar);
+
+	g_timebar = timebarCreate(mapX);
+	statebarRemove(g_statebar);
+	g_statebar = statebarCreate(entity.element.childNodes[0], idx);
+
+	stateselUpdate();
+}
+
 var timebarCreateSubbar = function (timebar, mapX, absY)
 {
 	var parent = timebar.parent;
@@ -870,7 +1046,7 @@ var timebarCreateSubbar = function (timebar, mapX, absY)
 	parent.appendChild(text);
 
 	timebar.subbar = subbar;
-}
+};
 
 var timebarRemoveSubbar = function (timebar)
 {
@@ -886,7 +1062,7 @@ var timebarRemoveSubbar = function (timebar)
 	}
 
 	timebar.subbar = undefined;
-}
+};
 
 var stateselTagvalSelect = function (evt, tagval)
 {
@@ -906,6 +1082,7 @@ var stateselTagvalSelect = function (evt, tagval)
 		for (i = 0; i < g_tagvalsel.selected.length; i++) {
 			child = g_tagvalsel.selected[i];
 			child.removeAttribute('fill-opacity');
+			child.style.fill = child.dataset.originalFill;
 		}
 
 		if (g_tagvalsel.element)
@@ -984,10 +1161,25 @@ var stateselTagvalSelect = function (evt, tagval)
 
 			/*
 			 * At this point we have found a rectangle that we
-			 * want to color, and we know the degree that we
-			 * want to color it!
+			 * want to color, and we know the degree that we want
+			 * to color it. If the ratio is less than 1 (that is,
+			 * if we want to highlight it as less than a solid),
+			 * we will set the opacity (and let our underlying
+			 * highlight shine through).  If, however, we want to
+			 * color the entire rectangle, we'll set the fill to
+			 * explicitly be the highlight color to avoid the
+			 * disappearing rectangle phenomenon that can occur
+			 * when rectangles are very small in absolute terms.
 			 */
-			child.setAttributeNS(null, 'fill-opacity', 1 - ratio);
+			child.dataset.originalFill = child.style.fill;
+
+			if (ratio < 1.0) {
+				child.setAttributeNS(null,
+				    'fill-opacity', 1 - ratio);
+			} else {
+				child.style.fill = g_highlight;
+			}
+
 			g_tagvalsel.selected.push(child);
 		}
 	}
@@ -1456,4 +1648,9 @@ var zoomclick = function (scale)
 	statemapsUpdate();
 	timebarShow(g_timebar);
 	stateselUpdate();
+};
+
+var zoomtime = function (time)
+{
+	zoomclick((globals.timeWidth / time) / g_transMatrix[0]);
 };
