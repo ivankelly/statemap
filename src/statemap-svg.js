@@ -1064,7 +1064,7 @@ var timebarRemoveSubbar = function (timebar)
 	timebar.subbar = undefined;
 };
 
-var stateselTagvalSelect = function (evt, tagval)
+var stateselTagvalSelect = function (evt, tagval, all_states)
 {
 	var tagdefs = {};
 	var i, entity;
@@ -1111,7 +1111,7 @@ var stateselTagvalSelect = function (evt, tagval)
 	 * tag value.
 	 */
 	for (i = 0; i < tags.length; i++) {
-		if (tags[i].state != state)
+		if (tags[i].state != state && !all_states)
 			continue;
 
 		if (tags[i][g_tagsel.tag] != tagval)
@@ -1142,7 +1142,7 @@ var stateselTagvalSelect = function (evt, tagval)
 				if (!datum.s[state])
 					continue;
 			} else {
-				if (datum.s != state)
+				if (datum.s != state && !all_states)
 					continue;
 			}
 
@@ -1321,8 +1321,8 @@ var stateselUpdate = function ()
 	var ttl = 0;
 	var ellipsis = false;
 
-	var click = function (tv) {
-		return (function (evt) { stateselTagvalSelect(evt, tv); });
+	click = function (tv) {
+		return (function (evt) { stateselTagvalSelect(evt, tv, event.shiftKey); });
 	};
 
 	for (i = 0; i <= sorted.length; i++) {
